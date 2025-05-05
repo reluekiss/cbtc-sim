@@ -1,0 +1,9 @@
+This is a WIP attempt to create a multicast cbtc system with some visual flair for testing purposes. This relies on having a system installation of raylib.
+
+For help with usage run:
+
+    make help
+
+Otherwise you will probably be okay with running:
+
+    make release run
