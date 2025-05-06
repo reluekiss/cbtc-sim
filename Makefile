@@ -1,9 +1,7 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -Wformat -Wformat=2 -Wimplicit-fallthrough -Werror=format-security -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3 -D_GLIBCXX_ASSERTIONS -fstrict-flex-arrays=3 -fstack-clash-protection -fstack-protector-strong -ffunction-sections -fdata-sections
+CFLAGS = -Wall -Wextra -Wformat -Wformat=2 -Wimplicit-fallthrough -Werror=format-security -D_GLIBCXX_ASSERTIONS -fstrict-flex-arrays=3 -fstack-clash-protection -fstack-protector-strong -ffunction-sections -fdata-sections
 LDFLAGS = -lm -pthread -lrt -Wl,--gc-sections -s -Wl,-z,nodlopen -Wl,-z,noexecstack -Wl,-z,relro -Wl,-z,now -Wl,--as-needed -Wl,--no-copy-dt-needed-entries
-
-RAYLIB_CFLAGS = $(CFLAGS)
-RAYLIB_LDFLAGS = $(LDFLAGS) -lraylib
+LDFLAGS += -L/usr/local/lib -lraylib -lm -lpthread -lrt -ljson-c
 
 BUILD_DIR = build
 SRC_DIR = src
@@ -28,12 +26,12 @@ train: src/train.c | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -o $(BUILD_DIR)/$@ $< $(LDFLAGS)
 
 cbtc_orchestrator: src/cbtc_orchestrator.c | $(BUILD_DIR)
-	$(CC) $(RAYLIB_CFLAGS) -o $(BUILD_DIR)/$@ $< $(RAYLIB_LDFLAGS)
+	$(CC) $(CFLAGS) -o $(BUILD_DIR)/$@ $< $(LDFLAGS)
 
 clean:
 	rm -rf $(BUILD_DIR)
 
-debug: CFLAGS += -ggdb -DDEBUG
+debug: CFLAGS += -ggdb -O -DDEBUG -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3 
 debug: all
 
 release: CFLAGS += -O3 -DNDEBUG

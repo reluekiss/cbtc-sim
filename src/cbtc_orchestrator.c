@@ -1,4 +1,6 @@
 #include "raylib.h"
+#include <arpa/inet.h>
+#include <netinet/in.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -7,6 +9,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <sys/mman.h>
+#include <sys/socket.h>
 #include <fcntl.h>
 #include <time.h>
 #include <pthread.h>
@@ -24,6 +27,8 @@
 #define STATION_WIDTH 40
 #define STATION_HEIGHT 20
 #define MAX_PROCESSES 20
+#define BUFFER_SIZE 1024
+#define POSITION_MULTICAST_PORT 8300
 
 // Shared memory structure for system state
 typedef struct {
@@ -110,6 +115,8 @@ SharedState *sharedState;
 int shmFd;
 const char *shmName = "/cbtc_state";
 int isCleanupDone = 0;  // Flag to prevent multiple cleanups
+int positionMulticastSocket;
+const char *positionMulticastGroup = "239.0.0.1";
 
 // Function to initialize shared memory
 void initSharedMemory() {
@@ -414,7 +421,81 @@ void setupEnvironmentVars() {
     setenv("CCS_PORT", "8000", 1);
     setenv("ZC_BASE_PORT", "8100", 1);
     setenv("MULTICAST_PORT", "8200", 1);
+    setenv("POSITION_MULTICAST_PORT", "8300", 1);
+    setenv("POSITION_MULTICAST_GROUP", "239.0.0.1", 1);
     setenv("SO_REUSEADDR", "1", 1);  // Signal to components to set SO_REUSEADDR
+    setenv("CONFIG_FILE", "track_config.json", 1);
+}
+
+// Set up position multicast listener
+void setupPositionMulticastListener() {
+    positionMulticastSocket = socket(AF_INET, SOCK_DGRAM, 0);
+    if (positionMulticastSocket < 0) {
+        perror("Position multicast socket creation failed");
+        exit(EXIT_FAILURE);
+    }
+
+    int reuse = 1;
+    if (setsockopt(positionMulticastSocket, SOL_SOCKET, SO_REUSEADDR, &reuse,
+                   sizeof(reuse)) < 0) {
+        perror("Setting SO_REUSEADDR failed");
+        close(positionMulticastSocket);
+        exit(EXIT_FAILURE);
+    }
+
+    struct sockaddr_in localAddr;
+    memset(&localAddr, 0, sizeof(localAddr));
+    localAddr.sin_family = AF_INET;
+    localAddr.sin_addr.s_addr = INADDR_ANY;
+    localAddr.sin_port = htons(POSITION_MULTICAST_PORT);
+
+    if (bind(positionMulticastSocket, (struct sockaddr *)&localAddr, sizeof(localAddr)) < 0) {
+        perror("Position multicast bind failed");
+        close(positionMulticastSocket);
+        exit(EXIT_FAILURE);
+    }
+
+    // Join multicast group for train positions
+    struct ip_mreq mreq;
+    mreq.imr_multiaddr.s_addr = inet_addr(positionMulticastGroup);
+    mreq.imr_interface.s_addr = INADDR_ANY;
+
+    if (setsockopt(positionMulticastSocket, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0) {
+        perror("Joining position multicast group failed");
+        close(positionMulticastSocket);
+        exit(EXIT_FAILURE);
+    }
+
+    printf("Joined train position multicast group: %s\n", positionMulticastGroup);
+}
+
+// Process position updates from trains
+void processPositionUpdate(char *message) {
+    int trainId, direction, speed, section;
+    float x, y;
+    int atStation = 0;
+    
+    if (sscanf(message, "TRAIN_POSITION %d %f %f %d %d %d %d", 
+               &trainId, &x, &y, &direction, &speed, &section, &atStation) >= 6) {
+        
+        pthread_mutex_lock(&sharedState->mutex);
+        
+        // Find the train in our shared state
+        for (int i = 0; i < sharedState->trainCount; i++) {
+            if (sharedState->trains[i].id == trainId) {
+                // Update train position and movement data
+                sharedState->trains[i].x = x;
+                sharedState->trains[i].y = y;
+                sharedState->trains[i].direction = direction;
+                sharedState->trains[i].speed = speed;
+                sharedState->trains[i].section = section;
+                sharedState->trains[i].atStation = atStation;
+                break;
+            }
+        }
+        
+        pthread_mutex_unlock(&sharedState->mutex);
+    }
 }
 
 // Launch a CBTC component as a separate process
@@ -501,12 +582,14 @@ void launchComponents() {
     
     // Finally, launch Trains
     for (int i = 0; i < sharedState->trainCount; i++) {
-        char id[8], zoneId[8], section[8];
+        char id[8], zoneId[8], section[8], initX[16], initY[16];
         sprintf(id, "%d", sharedState->trains[i].id);
         sprintf(zoneId, "%d", sharedState->trains[i].zoneId);
         sprintf(section, "%d", sharedState->trains[i].section);
+        sprintf(initX, "%.1f", sharedState->trains[i].x);
+        sprintf(initY, "%.1f", sharedState->trains[i].y);
         
-        char *trainArgs[] = {"./train", id, zoneId, section, "127.0.0.1", NULL};
+        char *trainArgs[] = {"./train", id, zoneId, section, "127.0.0.1", initX, initY, NULL};
         char name[32];
         sprintf(name, "Train %d", sharedState->trains[i].id);
         launchProcess(name, "./train", trainArgs);
@@ -515,6 +598,13 @@ void launchComponents() {
     
     // Add a final log message
     addLog("All CBTC components launched successfully");
+    
+    // // Wait for system to stabilize
+    // sleep(2);
+    // 
+    // // Route Train 102 to North station
+    // addLog("Routing Train 102 to North station");
+    // system("echo 'route 102 23' | nc localhost 8000");
 }
 
 // Terminate all child processes with proper signal handling
@@ -594,6 +684,9 @@ int main() {
     // Set up environment variables
     setupEnvironmentVars();
     
+    // Set up position multicast listener
+    setupPositionMulticastListener();
+    
     // Initialize system state
     initializeSignals();
     initializeSwitches();
@@ -615,6 +708,28 @@ int main() {
     
     // Main render loop
     while (!WindowShouldClose()) {
+        // Check for train position updates
+        fd_set readfds;
+        struct timeval tv;
+        FD_ZERO(&readfds);
+        FD_SET(positionMulticastSocket, &readfds);
+        tv.tv_sec = 0;
+        tv.tv_usec = 1000; // 1ms timeout for non-blocking check
+
+        if (select(positionMulticastSocket + 1, &readfds, NULL, NULL, &tv) > 0) {
+            if (FD_ISSET(positionMulticastSocket, &readfds)) {
+                char buffer[BUFFER_SIZE];
+                struct sockaddr_in senderAddr;
+                socklen_t addrLen = sizeof(senderAddr);
+                int bytesRead = recvfrom(positionMulticastSocket, buffer, BUFFER_SIZE, 0,
+                                  (struct sockaddr *)&senderAddr, &addrLen);
+                if (bytesRead > 0) {
+                    buffer[bytesRead] = '\0';
+                    processPositionUpdate(buffer);
+                }
+            }
+        }
+        
         BeginDrawing();
         ClearBackground(RAYWHITE);
         
@@ -710,11 +825,14 @@ int main() {
             
             DrawCircleLines(sharedState->trains[i].x, sharedState->trains[i].y, TRAIN_SIZE, BLACK);
             
-            char trainInfo[40];
-            sprintf(trainInfo, "%d (%d km/h) %s", sharedState->trains[i].id, 
+            char trainInfo[60];
+            sprintf(trainInfo, "%d (%d km/h) %s %s", 
+                    sharedState->trains[i].id, 
                     sharedState->trains[i].speed, 
-                    sharedState->trains[i].direction == 1 ? "→" : "←");
-            DrawText(trainInfo, sharedState->trains[i].x - 20, 
+                    sharedState->trains[i].direction == 1 ? "→" : "←",
+                    sharedState->trains[i].atStation ? "STOPPED" : "");
+            
+            DrawText(trainInfo, sharedState->trains[i].x - 30, 
                    sharedState->trains[i].y - 25, 10, BLACK);
         }
         

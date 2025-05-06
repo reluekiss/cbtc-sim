@@ -1,0 +1,46 @@
+{
+  "track_sections": [
+    {"id": 1, "zone": 1, "x_start": 100, "y_start": 300, "x_end": 140, "y_end": 300, "next_sections": [2]},
+    {"id": 2, "zone": 1, "x_start": 140, "y_start": 300, "x_end": 180, "y_end": 300, "next_sections": [3], "station": "Westgate"},
+    {"id": 3, "zone": 1, "x_start": 180, "y_start": 300, "x_end": 220, "y_end": 300, "next_sections": [4]},
+    {"id": 4, "zone": 1, "x_start": 220, "y_start": 300, "x_end": 260, "y_end": 300, "next_sections": [5]},
+    {"id": 5, "zone": 1, "x_start": 260, "y_start": 300, "x_end": 300, "y_end": 300, "next_sections": [6]},
+    {"id": 6, "zone": 1, "x_start": 300, "y_start": 300, "x_end": 340, "y_end": 300, "next_sections": [7]},
+    {"id": 7, "zone": 1, "x_start": 340, "y_start": 300, "x_end": 380, "y_end": 300, "next_sections": [8], "station": "Central"},
+    {"id": 8, "zone": 2, "x_start": 380, "y_start": 300, "x_end": 420, "y_end": 300, "next_sections": [9, 21], "switch": 1},
+    {"id": 9, "zone": 2, "x_start": 420, "y_start": 300, "x_end": 460, "y_end": 300, "next_sections": [10]},
+    {"id": 10, "zone": 2, "x_start": 460, "y_start": 300, "x_end": 500, "y_end": 300, "next_sections": [11]},
+    {"id": 11, "zone": 2, "x_start": 500, "y_start": 300, "x_end": 540, "y_end": 300, "next_sections": [12]},
+    {"id": 12, "zone": 2, "x_start": 540, "y_start": 300, "x_end": 580, "y_end": 300, "next_sections": [13, 24], "switch": 2},
+    {"id": 13, "zone": 2, "x_start": 580, "y_start": 300, "x_end": 620, "y_end": 300, "next_sections": [14], "station": "Eastgate"},
+    {"id": 14, "zone": 2, "x_start": 620, "y_start": 300, "x_end": 660, "y_end": 300, "next_sections": [15]},
+    {"id": 15, "zone": 3, "x_start": 660, "y_start": 300, "x_end": 700, "y_end": 300, "next_sections": [16]},
+    {"id": 16, "zone": 3, "x_start": 700, "y_start": 300, "x_end": 740, "y_end": 300, "next_sections": [17]},
+    {"id": 17, "zone": 3, "x_start": 740, "y_start": 300, "x_end": 780, "y_end": 300, "next_sections": [18]},
+    {"id": 18, "zone": 3, "x_start": 780, "y_start": 300, "x_end": 820, "y_end": 300, "next_sections": [19], "station": "Terminal"},
+    {"id": 19, "zone": 3, "x_start": 820, "y_start": 300, "x_end": 860, "y_end": 300, "next_sections": [20]},
+    {"id": 20, "zone": 3, "x_start": 860, "y_start": 300, "x_end": 900, "y_end": 300, "next_sections": [19], "reverse": true},
+    {"id": 21, "zone": 2, "x_start": 420, "y_start": 300, "x_end": 420, "y_end": 260, "next_sections": [22]},
+    {"id": 22, "zone": 2, "x_start": 420, "y_start": 260, "x_end": 500, "y_end": 260, "next_sections": [23]},
+    {"id": 23, "zone": 2, "x_start": 500, "y_start": 260, "x_end": 580, "y_end": 260, "next_sections": [24], "station": "North"},
+    {"id": 24, "zone": 2, "x_start": 580, "y_start": 260, "x_end": 580, "y_end": 300, "next_sections": [13]}
+  ],
+  "stations": [
+    {"name": "Westgate", "section": 2, "stop_time": 5, "terminus": false},
+    {"name": "Central", "section": 7, "stop_time": 10, "terminus": false},
+    {"name": "North", "section": 23, "stop_time": 7, "terminus": false},
+    {"name": "Eastgate", "section": 13, "stop_time": 5, "terminus": false},
+    {"name": "Terminal", "section": 18, "stop_time": 15, "terminus": true}
+  ],
+  "switches": [
+    {"id": 1, "section": 8, "normal_next": 9, "reverse_next": 21},
+    {"id": 2, "section": 12, "normal_next": 13, "reverse_next": 24}
+  ],
+  "signals": [
+    {"id": 1, "section": 1, "zone": 1},
+    {"id": 2, "section": 5, "zone": 1},
+    {"id": 3, "section": 9, "zone": 2},
+    {"id": 4, "section": 21, "zone": 2},
+    {"id": 5, "section": 15, "zone": 3}
+  ]
+}
